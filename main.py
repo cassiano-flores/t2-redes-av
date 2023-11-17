@@ -8,6 +8,13 @@ from collections import deque
 import time
 from pysnmp.hlapi import *
 
+# SNMP Manager
+#
+# Integrantes:
+# - Cassiano Luis Flores Michel
+# - José Eduardo Serpa Rodrigues
+# - Pedro Menuzzi Mascaró
+
 # SNMP parameters
 community = 'public'
 host = 'localhost'
@@ -15,28 +22,28 @@ port = 161
 
 oids = {
 #	'sysDescr': '1.3.6.1.2.1.1.1',
-    'ifInErrors': '1.3.6.1.2.1.2.2.1.14.1',
-    'ifOutOctets': '1.3.6.1.2.1.2.2.1.16.1',
-    'ifSpeed': '1.3.6.1.2.1.2.2.1.5.1',
-    'ipInDiscards': '1.3.6.1.2.1.4.3.0',
-    'ipForwDatagrams': '1.3.6.1.2.1.4.6.0',
-    'tcpInSegs': '1.3.6.1.2.1.6.10.0',
-    'tcpOutSegs': '1.3.6.1.2.1.6.11.0',
-    'udpInDatagrams': '1.3.6.1.2.1.7.1.0',
-    'udpOutDatagrams': '1.3.6.1.2.1.7.4.0',
-    'sysUpTime': '1.3.6.1.2.1.1.3.0',
-    'sysLocation': '1.3.6.1.2.1.1.6.0',
-    'sysContact': '1.3.6.1.2.1.1.4.0',
-    'sysName': '1.3.6.1.2.1.1.5.0',
-    'sysDescr': '1.3.6.1.2.1.1.1.0',
-    'ifTable': '1.3.6.1.2.1.2.2',
-    'ipAddrTable': '1.3.6.1.2.1.4.20',
-    'ipRouteTable': '1.3.6.1.2.1.4.21',
-    'tcpConnTable': '1.3.6.1.2.1.6.13',
-    'icmpInEchoReps': '1.3.6.1.2.1.5.21.0',
-    'icmpOutEchoReps': '1.3.6.1.2.1.5.22.0',
-    'snmpInPkts': '1.3.6.1.2.1.11.1.0',
-    'snmpOutPkts': '1.3.6.1.2.1.11.2.0',
+    'ifInErrors': '1.3.6.1.2.1.2.2.1.14.1',    # Número de pacotes recebidos com erro.
+    'ifOutOctets': '1.3.6.1.2.1.2.2.1.16.1',   # Número de bytes transmitidos por segundo.
+    'ifSpeed': '1.3.6.1.2.1.2.2.1.5.1',        # Velocidade do link.
+    'ipInDiscards': '1.3.6.1.2.1.4.3.0',       # Porcentagem de datagramas IP recebidos com erro.
+    'ipForwDatagrams': '1.3.6.1.2.1.4.6.0',    # Taxa de forwarding de datagramas IP por segundo
+    'tcpInSegs': '1.3.6.1.2.1.6.10.0',         # Número de segmentos TCP recebidos
+    'tcpOutSegs': '1.3.6.1.2.1.6.11.0',        # Número de segmentos TCP transmitidos
+    'udpInDatagrams': '1.3.6.1.2.1.7.1.0',     # Número de datagramas UDP recebidos
+    'udpOutDatagrams': '1.3.6.1.2.1.7.4.0',    # Número de datagramas UDP transmitidos
+    'sysUpTime': '1.3.6.1.2.1.1.3.0',          # Tempo desde a última reinicialização do agente.
+    'sysLocation': '1.3.6.1.2.1.1.6.0',        # Localização física do agente.
+    'sysContact': '1.3.6.1.2.1.1.4.0',         # Informações de contato do administrador do sistema.
+    'sysName': '1.3.6.1.2.1.1.5.0',            # Nome do sistema.
+    'sysDescr': '1.3.6.1.2.1.1.1.0',           # Descrição do sistema.
+    'ifTable': '1.3.6.1.2.1.2.2',              # Tabela de interfaces de rede.
+    'ipAddrTable': '1.3.6.1.2.1.4.20',         # Tabela de endereços IP
+    'ipRouteTable': '1.3.6.1.2.1.4.21',        # Tabela de rotas IP
+    'tcpConnTable': '1.3.6.1.2.1.6.13',        # Tabela de conexões TCP
+    'icmpInEchoReps': '1.3.6.1.2.1.5.21.0',    # Número de respostas de eco ICMP recebidas.
+    'icmpOutEchoReps': '1.3.6.1.2.1.5.22.0',   # Número de respostas de eco ICMP transmitidas.
+    'snmpInPkts': '1.3.6.1.2.1.11.1.0',        # Número de pacotes SNMP recebidos.
+    'snmpOutPkts': '1.3.6.1.2.1.11.2.0',       # Número de pacotes SNMP transmitidos.
 }
 
 # Configurações de Gráficos
@@ -137,8 +144,7 @@ def update_data(n):
 
 	# porcentagem_pacotes_recebidos_erro = ifInErrors / (ifInUCastPkts + ifInNUCastPkts)
 	#
-	# taxa_bytes_segundo = (((ifInOctets + ifOutOctets) * tempo_dois) - ((ifInOctets + ifOutOctets) * tempo_um)) / (
-	# 			tempo_dois - tempo_um)
+	# taxa_bytes_segundo = (((ifInOctets + ifOutOctets) * tempo_dois) - ((ifInOctets + ifOutOctets) * tempo_um)) / (tempo_dois - tempo_um)
 	#
 	# utilizacao_link = (taxa_bytes_segundo * 8) / ifSpeed
 	#
