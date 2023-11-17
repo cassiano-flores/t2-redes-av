@@ -1,143 +1,171 @@
-# SNMP Manager
-#
-# Integrantes:
-# - Cassiano Luis Flores Michel
-# - José Eduardo Serpa Rodrigues
-# - Pedro Menuzzi Mascaró
-
-import tkinter as tk
-from tkinter import ttk
-from pysnmp.hlapi import *
-import matplotlib.pyplot as plt
-from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
-import threading
+import dash 
+from dash.dependencies import Output, Input
+from dash import dcc
+from dash import html
+import plotly 
+import plotly.graph_objs as go 
+from collections import deque 
 import time
+from pysnmp.hlapi import *
 
-# Lista de objetos MIB II para a gerência de desempenho
-mib_oids = [
-    ('1.3.6.1.2.1.2.2.1.14.1', 'Porcentagem de pacotes recebidos com erro'),
-    ('1.3.6.1.2.1.2.2.1.10.1', 'Taxa de bytes/segundo'),
-    ('1.3.6.1.2.1.2.2.1.5.1', 'Utilização do link'),
-    ('1.3.6.1.2.1.4.3.0', 'Porcentagem de datagramas IP recebidos com erro'),
-    ('1.3.6.1.2.1.2.2.1.9.1', 'Taxa de forwarding/segundo'),
-]
+# SNMP parameters
+community = 'public'
+host = 'localhost'
+port = 161
 
-historical_data = [[] for _ in mib_oids]
+oids = {
+#	'sysDescr': '1.3.6.1.2.1.1.1',
+    'ifInErrors': '1.3.6.1.2.1.2.2.1.14.1',
+    'ifOutOctets': '1.3.6.1.2.1.2.2.1.16.1',
+    'ifSpeed': '1.3.6.1.2.1.2.2.1.5.1',
+    'ipInDiscards': '1.3.6.1.2.1.4.3.0',
+    'ipForwDatagrams': '1.3.6.1.2.1.4.6.0',
+    'tcpInSegs': '1.3.6.1.2.1.6.10.0',
+    'tcpOutSegs': '1.3.6.1.2.1.6.11.0',
+    'udpInDatagrams': '1.3.6.1.2.1.7.1.0',
+    'udpOutDatagrams': '1.3.6.1.2.1.7.4.0',
+    'sysUpTime': '1.3.6.1.2.1.1.3.0',
+    'sysLocation': '1.3.6.1.2.1.1.6.0',
+    'sysContact': '1.3.6.1.2.1.1.4.0',
+    'sysName': '1.3.6.1.2.1.1.5.0',
+    'sysDescr': '1.3.6.1.2.1.1.1.0',
+    'ifTable': '1.3.6.1.2.1.2.2',
+    'ipAddrTable': '1.3.6.1.2.1.4.20',
+    'ipRouteTable': '1.3.6.1.2.1.4.21',
+    'tcpConnTable': '1.3.6.1.2.1.6.13',
+    'icmpInEchoReps': '1.3.6.1.2.1.5.21.0',
+    'icmpOutEchoReps': '1.3.6.1.2.1.5.22.0',
+    'snmpInPkts': '1.3.6.1.2.1.11.1.0',
+    'snmpOutPkts': '1.3.6.1.2.1.11.2.0',
+}
 
-# Função para consultar um objeto na MIB
-def get_snmp_data(target, oid):
-    errorIndication, errorStatus, errorIndex, varBinds = next(
-        getCmd(SnmpEngine(),
-               CommunityData(community.get(), mpModel=0),
-               UdpTransportTarget((target, 161)),
-               ContextData(),
-               ObjectType(ObjectIdentity(oid)))
+# Configurações de Gráficos
+X = []
+Y = {key: [] for key in oids}
+
+
+def get_snmp_data(oid):
+    iterator = getCmd(
+        SnmpEngine(),
+        CommunityData(community, mpModel=0),
+        UdpTransportTarget((host, port)),
+        ContextData(),
+        ObjectType(ObjectIdentity(oid))
     )
 
-    if errorIndication:
+    error_indication, error_status, error_index, var_binds = next(iterator)
+
+    if error_indication:
+        print(error_indication)
         return None
-    elif errorStatus:
+    elif error_status:
+        print('%s at %s' % (
+            error_status.prettyPrint(),
+            error_index and var_binds[int(error_index) - 1][0] or '?'
+        ))
         return None
     else:
-        return varBinds[0][1]
+        for var_bind in var_binds:
+            return var_bind[1]
 
-# Função para atualizar os dados
-def update_data():
-    while monitoring:
-        for i, (oid, label) in enumerate(mib_oids):
-            value = get_snmp_data(agent_ips[agent_combobox.current()], oid)
-            if value is not None:
-                data_labels[i].config(text=f'{label}: {value.prettyPrint()}')
-                historical_data[i].append((time.time(), float(value)))
-            else:
-                data_labels[i].config(text=f'{label}: Erro ao obter dados')
+app = dash.Dash(__name__)
+final_html = html.Div(
+	[
+		dcc.Interval(
+			id='my-input',
+			interval=3 * 1000,
+			n_intervals=0
+		),
 
-        # Verifique a queda do agente consultando sysUpTime
-        sysuptime_oid = '1.3.6.1.2.1.1.3.0'
-        sysuptime_value = get_snmp_data(agent_ips[agent_combobox.current()], sysuptime_oid)
-        if sysuptime_value is None:
-            alarm_label.config(text="Agente SNMP inativo: Alarme gerado!")
+		html.H1('Simple Network Management Protocol - Monitores de Recurso e Desempenho'),
 
-        time.sleep(periodicity.get())
+		html.Div([
 
-# Função para iniciar o monitoramento
-def start_monitor():
-    global monitoring
-    monitoring = True
-    monitoring_thread = threading.Thread(target=update_data)
-    monitoring_thread.daemon = True
-    monitoring_thread.start()
+			html.Div([
+				html.H3('Info'),
+				html.Div(id='my-output')
+			], style={'display':'flex', 'flex-direction': 'column', 'width': '100%'}),
 
-# Função para parar o monitoramento
-def stop_monitor():
-    global monitoring
-    monitoring = False
 
-# Função para criar e exibir gráficos
-def show_graph():
-    fig, ax = plt.subplots()
-    for i, (oid, label) in enumerate(mib_oids):
-        values = []
-        timestamps = []
-        for data_point in historical_data[i]:
-            timestamps.append(data_point[0])
-            values.append(data_point[1])
-        ax.plot(timestamps, values, label=label)
-    ax.set_xlabel('Tempo')
-    ax.set_ylabel('Valores')
-    ax.legend()
-    graph_window = tk.Toplevel(root)
-    graph_window.title("Gráficos")
-    canvas = FigureCanvasTkAgg(fig, master=graph_window)
-    canvas_widget = canvas.get_tk_widget()
-    canvas_widget.pack()
-    canvas.draw()
+			html.Div([
+				html.H3('Desempenho'),
+				html.Label('grafico1'),
+				dcc.Graph(id='live-graph', animate=True),
 
-# Configuração da interface gráfica
-root = tk.Tk()
-root.title("Gerente SNMP")
 
-# Variáveis para controle
-monitoring = False
+				html.Label('grafico2'),
+				dcc.Graph(id = 'live-graph2', animate = True),
 
-# Defina as máquinas e comunidades aqui
-agent_ips = ['127.0.0.1', '192.168.1.1']  # Exemplo com duas máquinas
-agent_combobox_label = tk.Label(root, text="Selecione a máquina:")
-agent_combobox_label.pack()
-agent_combobox = ttk.Combobox(root, values=agent_ips)
-agent_combobox.pack()
-community_label = tk.Label(root, text="Comunidade SNMP:")
-community_label.pack()
-community = tk.StringVar()
-community_entry = tk.Entry(root, textvariable=community)
-community_entry.pack()
 
-# Configuração do tempo de periodicidade
-periodicity_label = tk.Label(root, text="Tempo de periodicidade (segundos):")
-periodicity_label.pack()
-periodicity = tk.DoubleVar()
-periodicity_entry = tk.Entry(root, textvariable=periodicity)
-periodicity_entry.pack()
+			], style={'display':'flex',
+					  'flex-direction': 'column',
+					  'width': '100%',
+					})
 
-# Botões de controle
-start_button = tk.Button(root, text="Iniciar Monitoramento", command=start_monitor)
-start_button.pack()
-stop_button = tk.Button(root, text="Parar Monitoramento", command=stop_monitor)
-stop_button.pack()
-graph_button = tk.Button(root, text="Exibir Gráficos", command=show_graph)
-graph_button.pack()
 
-# Rótulo de alarme
-alarm_label = tk.Label(root, text="", fg="red")
-alarm_label.pack()
+		], style={'display':'flex', 'flex-direction': 'column'}),
 
-# Lista de objetos MIB II para exibir os resultados
-data_labels = []
 
-# Crie rótulos para exibir os resultados
-for oid, label in mib_oids:
-    data_label = tk.Label(root, text=f'{label}: Aguardando atualização...')
-    data_label.pack()
-    data_labels.append(data_label)
 
-root.mainloop()
+	], style={'display' : 'flex', 'flex-direction': 'column'}
+
+
+)
+app.layout = final_html
+
+def decode(string):
+	string_final = ''
+	for c in string:
+		string_final += chr(c)
+	return string_final
+
+@app.callback(
+	Output(component_id='my-output', component_property='children'),
+	Input(component_id='my-input', component_property='n_intervals')
+)
+def update_data(n):
+	sysDescrObject = decode(get_snmp_data('1.3.6.1.2.1.1.1.0'))
+	sysDescrObject = sysDescrObject.split("Software: ")
+
+	sysUpTime = get_snmp_data('1.3.6.1.2.1.1.3.0')
+	print(TimeTicks.getNamedValues(sysUpTime))
+
+
+	#cada objeto recuperado pelo metodo	'get_snmp_data(<oid_adress>)', retorna
+	#um buffer, referente ao conteudo do packote na rede, onde devemos
+	#capturar as informações para exibir na string final
+
+	# porcentagem_pacotes_recebidos_erro = ifInErrors / (ifInUCastPkts + ifInNUCastPkts)
+	#
+	# taxa_bytes_segundo = (((ifInOctets + ifOutOctets) * tempo_dois) - ((ifInOctets + ifOutOctets) * tempo_um)) / (
+	# 			tempo_dois - tempo_um)
+	#
+	# utilizacao_link = (taxa_bytes_segundo * 8) / ifSpeed
+	#
+	# porcentagem_datagramas_IP_recebidos_erro = (ipInHdrErrors + ipInAddrErrors + ipInUnknownProtos) / ipInReceives
+	#
+	# taxa_forwarding_segundo = ((ipForwDatagrams * tempo_dois) - (ipForwDatagrams * tempo_um)) / (tempo_dois - tempo_um)
+
+	final_dump = ''
+	final_dump += "sysDescr:"
+	final_dump += sysDescrObject[1]
+	final_dump += '<br>'
+	final_dump += 'sysUpTime:'
+	#final_dump += sysUpTime
+
+	return final_dump
+
+
+# data = plotly.graph_objs.Scatter(
+# 		x=list(X),
+# 		y=list(Y),
+# 		name='Scatter',
+# 		mode= 'lines+markers'
+# )
+#
+# return {'data': [data],
+# 		'layout' : go.Layout(xaxis=dict(range=[min(X),max(X)]),yaxis = dict(range = [min(Y),max(Y)]),)}
+
+
+if __name__ == '__main__': 
+	app.run_server(host='127.0.0.1', port=8080 ,debug=True)
