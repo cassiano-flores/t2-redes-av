@@ -74,7 +74,7 @@ def get_snmp_data(oid):
             return var_bind[1]
 
 
-def get_snmp_bulk(oid):
+def get_snmp_bulk(oid, isint=True):
     # Criar a lista de OIDs para todas as interfaces
     oids_to_query = [f'{oid}.{i}' for i in range(1, if_number_object + 1)]
 
@@ -100,7 +100,10 @@ def get_snmp_bulk(oid):
         return None
     else:
         # Extrair os valores para todas as interfaces
-        values_for_interfaces = [int(var_bind[1]) if var_bind[1] else 0 for var_bind in var_binds_table]
+        if isint:
+            values_for_interfaces = [int(var_bind[1]) if var_bind[1] else 0 for var_bind in var_binds_table]
+        else:
+            values_for_interfaces = [var_bind[1] if var_bind[1] else 0 for var_bind in var_binds_table]
 
         return values_for_interfaces
 
@@ -365,6 +368,18 @@ def update_data(n):
     if local == '':
         local = 'None'
 
+    table = get_snmp_bulk('1.3.6.1.2.1.31.1.1.1.1', False)
+
+    trs = [html.Tr(html.Th('Interfaces de Rede'))]
+
+    for i in range(n_interfaces-1):
+        name = decode(table[i])
+        trs.append( html.Tr(html.Td(f'{name}')) )
+
+    table_html = html.Div([
+        html.Table(trs, style={'border': 'solid 2px black'})
+    ])
+
     dump = html.Div([
         html.Label(["Nome do dispositivo: "], style={'font-weight': 'bold'}),
         html.Label(f"{decode(nome)}"),
@@ -381,7 +396,7 @@ def update_data(n):
         html.Label(["Tempo Ativo do Sistema: "], style={'font-weight': 'bold'}),
         html.Label(f"{dias} dias, {horas} horas, {minutos} minutos e {segundos} segundos"),
         html.Br(),
-
+        table_html
 
     ], )
 
