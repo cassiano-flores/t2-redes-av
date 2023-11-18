@@ -108,7 +108,7 @@ def get_snmp_bulk(oid):
         return None
     else:
         # Extrair os valores para todas as interfaces
-        values_for_interfaces = [int(var_bind[1]) for var_bind in var_binds_table]
+        values_for_interfaces = [int(var_bind[1]) if var_bind[1] else 0 for var_bind in var_binds_table]
 
         return values_for_interfaces
 
@@ -180,6 +180,8 @@ x2 = deque(maxlen=20)
 y2 = deque(maxlen=20)
 x3 = deque(maxlen=20)
 y3 = deque(maxlen=20)
+x4 = deque(maxlen=20)
+y4 = deque(maxlen=20)
 
 
 @app.callback(
@@ -257,8 +259,35 @@ def update_graph3(n):
 
     layout = go.Layout(
         title='Taxa de Bytes/Segundo',
-        xaxis=dict(title='Tempo (s)', range=[min(x3), max(x3)]),
+        xaxis=dict(title='Tempo (hh:mm:ss)', range=[min(x3), max(x3)]),
         yaxis=dict(title='MegaBytes', range=[min(y3), max(y3)]),
+    )
+
+    return {'data': [data], 'layout': layout}
+
+@app.callback(
+    Output('graph4', 'figure'),
+    [Input('my-input', 'n_intervals')]
+)
+def update_graph4(n):
+    tempo_atual_em_segundos = time.time()
+    data_hora_atual = datetime.fromtimestamp(tempo_atual_em_segundos)
+    # hora_formatada = data_hora_atual.strftime("%H:%M:%S")
+    x4.append(data_hora_atual)
+    y4.append(int(utilizacao_link() * 100))
+
+
+    data = plotly.graph_objs.Scatter(
+        x=list(x4),
+        y=list(y4),
+        name='Scatter',
+        mode='lines+markers'
+    )
+
+    layout = go.Layout(
+        title='Porcentagem de utilização da largura de banda da rede',
+        xaxis=dict(title='Tempo (hh:mm:ss)', range=[min(x4), max(x4)]),
+        yaxis=dict(title='%', range=[min(y4), max(y4)]),
     )
 
     return {'data': [data], 'layout': layout}
@@ -329,6 +358,9 @@ def taxa_bytes_segundo():
     return ((((if_in_octets + if_out_octets) * second_time) - ((if_in_octets + if_out_octets) * first_time)) /
             (second_time - first_time))
 
+def utilizacao_link():
+    if_speed = sum(get_snmp_bulk(oids['ifSpeed']))
+    return (taxa_bytes_segundo() * 8) / if_speed
 
 if __name__ == '__main__':
     app.run_server(host='127.0.0.1', port=8080, debug=True)
