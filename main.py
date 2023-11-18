@@ -126,22 +126,38 @@ def decode(string):
     Input(component_id='my-input', component_property='n_intervals')
 )
 def update_data(n):
-    dump = ''
-
     sysDescrObject = decode(get_snmp_data('1.3.6.1.2.1.1.1.0'))
     software = sysDescrObject.split("Software: ")
     hardware = sysDescrObject.split("Software: ")
     hardware = hardware[0]
 
-    sysUpTime = get_snmp_data('1.3.6.1.2.1.1.3.0')
-    print( ((sysUpTime) / 100) / 3600)
+    total_milissegundos = get_snmp_data('1.3.6.1.2.1.1.3.0')
+    total_segundos = total_milissegundos // 100
+    dias = total_segundos // (24 * 3600)
+    horas = (total_segundos % (24 * 3600)) // 3600
+    minutos = (total_segundos % 3600) // 60
+    segundos = total_segundos % 60
 
+    nome = get_snmp_data('1.3.6.1.2.1.1.5.0')
+
+    n_interfaces = get_snmp_data('1.3.6.1.2.1.2.1.0')
+
+    location = get_snmp_data('1.3.6.1.2.1.1.6.0')
 
     dump = html.Div([
+        html.Label(["Nome do dispositivo: "], style={'font-weight': 'bold'}),
+        html.Label(f"{decode(nome)}"),
+        html.Br(),
+        html.Label(["Número de interfaces presentes no sistema: "], style={'font-weight': 'bold'}),
+        html.Label(f"{n_interfaces}"),
+        html.Br(),
         html.Label(["Hardware: "], style={'font-weight': 'bold'}), html.Label(f"{hardware[10:len(hardware)-2]}"),
         html.Br(),
         html.Label(["Software: "], style={'font-weight': 'bold'}), html.Label(f"{software[1]}"),
         html.Br(),
+        html.Label(["Tempo Ativo do Sistema: "], style={'font-weight': 'bold'}), html.Label(f"{dias} dias, {horas} horas, {minutos} minutos e {segundos} segundos"),
+        html.Br(),
+
     ], )
 
     return dump
