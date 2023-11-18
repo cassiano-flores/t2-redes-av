@@ -80,9 +80,6 @@ def get_snmp_data(oid):
             return var_bind[1]
 
 
-# Número interfaces
-ifNumberObject = int(get_snmp_data(oids['ifNumber']))
-
 
 # Função para realizar a consulta SNMP usando bulkCmd
 def get_snmp_bulk(oid):
@@ -116,16 +113,7 @@ def get_snmp_bulk(oid):
         return values_for_interfaces
 
 
-# ******************************* Métricas *******************************
-def porcentagem_pacotes_recebidos_erro():
-    if_in_errors_object = sum(get_snmp_bulk(oids['ifInErrors']))
-    if_in_ucast_pkts_object = sum(get_snmp_bulk(oids['ifInUcastPkts']))
-    if_in_n_ucast_pkts_object = sum(get_snmp_bulk(oids['ifInNUcastPkts']))
 
-    if (if_in_ucast_pkts_object + if_in_n_ucast_pkts_object) > 0:
-        return if_in_errors_object / (if_in_ucast_pkts_object + if_in_n_ucast_pkts_object)
-
-    return if_in_errors_object
 
 
 app = dash.Dash(__name__)
@@ -133,7 +121,7 @@ final_html = html.Div(
     [
         dcc.Interval(
             id='my-input',
-            interval=3 * 1000,
+            interval=5 * 1000,
             n_intervals=0
         ),
 
@@ -190,6 +178,8 @@ x1 = deque(maxlen=20)
 y1 = deque(maxlen=20)
 x2 = deque(maxlen=20)
 y2 = deque(maxlen=20)
+x3 = deque(maxlen=20)
+y3 = deque(maxlen=20)
 
 
 @app.callback(
@@ -247,6 +237,34 @@ def update_graph2(n):
 
 
 @app.callback(
+    Output('graph3', 'figure'),
+    [Input('my-input', 'n_intervals')]
+)
+def update_graph3(n):
+    tempo_atual_em_segundos = time.time()
+    data_hora_atual = datetime.fromtimestamp(tempo_atual_em_segundos)
+    # hora_formatada = data_hora_atual.strftime("%H:%M:%S")
+    x3.append(data_hora_atual)
+    y3.append(int(taxa_bytes_segundo()/1000000))
+
+
+    data = plotly.graph_objs.Scatter(
+        x=list(x3),
+        y=list(y3),
+        name='Scatter',
+        mode='lines+markers'
+    )
+
+    layout = go.Layout(
+        title='Taxa de Bytes/Segundo',
+        xaxis=dict(title='Tempo (s)', range=[min(x3), max(x3)]),
+        yaxis=dict(title='MegaBytes', range=[min(y3), max(y3)]),
+    )
+
+    return {'data': [data], 'layout': layout}
+
+
+@app.callback(
     Output(component_id='my-output', component_property='children'),
     Input(component_id='my-input', component_property='n_intervals')
 )
@@ -285,6 +303,31 @@ def update_data(n):
     ], )
 
     return dump
+
+
+
+# ******************************* Métricas *******************************
+ifNumberObject = int(get_snmp_data(oids['ifNumber']))
+interval_time = 5
+
+def porcentagem_pacotes_recebidos_erro():
+    if_in_errors = sum(get_snmp_bulk(oids['ifInErrors']))
+    if_in_ucast_pkts = sum(get_snmp_bulk(oids['ifInUcastPkts']))
+    if_in_n_ucast_pkts = sum(get_snmp_bulk(oids['ifInNUcastPkts']))
+
+    if (if_in_ucast_pkts + if_in_n_ucast_pkts) > 0:
+        return if_in_errors / (if_in_ucast_pkts + if_in_n_ucast_pkts)
+
+    return if_in_errors
+
+def taxa_bytes_segundo():
+    if_in_octets = sum(get_snmp_bulk(oids['ifInOctets']))
+    if_out_octets = sum(get_snmp_bulk(oids['ifOutOctets']))
+    second_time = time.time()
+    first_time = int(time.time() - interval_time)
+
+    return ((((if_in_octets + if_out_octets) * second_time) - ((if_in_octets + if_out_octets) * first_time)) /
+            (second_time - first_time))
 
 
 if __name__ == '__main__':
