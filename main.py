@@ -85,7 +85,7 @@ ifNumberObject = int(get_snmp_data(oids['ifNumber']))
 
 
 # Função para realizar a consulta SNMP usando bulkCmd
-def snmp_bulk_get(oid):
+def get_snmp_bulk(oid):
     # Criar a lista de OIDs para todas as interfaces
     oids_to_query = [f'{oid}.{i}' for i in range(1, ifNumberObject + 1)]
 
@@ -118,9 +118,9 @@ def snmp_bulk_get(oid):
 
 # ******************************* Métricas *******************************
 def porcentagem_pacotes_recebidos_erro():
-    if_in_errors_object = sum(snmp_bulk_get(oids['ifInErrors']))
-    if_in_ucast_pkts_object = sum(snmp_bulk_get(oids['ifInUcastPkts']))
-    if_in_n_ucast_pkts_object = sum(snmp_bulk_get(oids['ifInNUcastPkts']))
+    if_in_errors_object = sum(get_snmp_bulk(oids['ifInErrors']))
+    if_in_ucast_pkts_object = sum(get_snmp_bulk(oids['ifInUcastPkts']))
+    if_in_n_ucast_pkts_object = sum(get_snmp_bulk(oids['ifInNUcastPkts']))
 
     if (if_in_ucast_pkts_object + if_in_n_ucast_pkts_object) > 0:
         return if_in_errors_object / (if_in_ucast_pkts_object + if_in_n_ucast_pkts_object)
@@ -186,8 +186,10 @@ def decode(string):
     return string_final
 
 
-x = deque(maxlen=20)
-y = deque(maxlen=20)
+x1 = deque(maxlen=20)
+y1 = deque(maxlen=20)
+x2 = deque(maxlen=20)
+y2 = deque(maxlen=20)
 
 
 @app.callback(
@@ -198,20 +200,47 @@ def update_graph1(n):
     tempo_atual_em_segundos = time.time()
     data_hora_atual = datetime.fromtimestamp(tempo_atual_em_segundos)
     # hora_formatada = data_hora_atual.strftime("%H:%M:%S")
-    x.append(data_hora_atual)
-    y.append(int(get_snmp_data('1.3.6.1.2.1.5.21.0')))
+    x1.append(data_hora_atual)
+    y1.append(int(get_snmp_data('1.3.6.1.2.1.5.21.0')))
 
     data = plotly.graph_objs.Scatter(
-        x=list(x),
-        y=list(y),
+        x=list(x1),
+        y=list(y1),
         name='Scatter',
         mode='lines+markers'
     )
 
     layout = go.Layout(
         title='Requisições ICMP ECHO Recebidas',
-        xaxis=dict(title='Tempo', range=[min(x), max(x)]),
-        yaxis=dict(title='Requisições', range=[min(y), max(y)]),
+        xaxis=dict(title='Tempo (hh:mm:ss)', range=[min(x1), max(x1)]),
+        yaxis=dict(title='Requisições', range=[min(y1), max(y1)]),
+    )
+
+    return {'data': [data], 'layout': layout}
+
+@app.callback(
+    Output('graph2', 'figure'),
+    [Input('my-input', 'n_intervals')]
+)
+def update_graph2(n):
+    tempo_atual_em_segundos = time.time()
+    data_hora_atual = datetime.fromtimestamp(tempo_atual_em_segundos)
+    # hora_formatada = data_hora_atual.strftime("%H:%M:%S")
+    x2.append(data_hora_atual)
+    y2.append(porcentagem_pacotes_recebidos_erro())
+
+
+    data = plotly.graph_objs.Scatter(
+        x=list(x2),
+        y=list(y2),
+        name='Scatter',
+        mode='lines+markers'
+    )
+
+    layout = go.Layout(
+        title='Porcentagem de pacotes recebidos com erro',
+        xaxis=dict(title='Tempo (hh:mm:ss)', range=[min(x2), max(x2)]),
+        yaxis=dict(title='%', range=[min(y2), max(y2)]),
     )
 
     return {'data': [data], 'layout': layout}
@@ -237,8 +266,6 @@ def update_data(n):
     nome = get_snmp_data('1.3.6.1.2.1.1.5.0')
 
     n_interfaces = get_snmp_data('1.3.6.1.2.1.2.1.0')
-
-    location = get_snmp_data('1.3.6.1.2.1.1.6.0')
 
     dump = html.Div([
         html.Label(["Nome do dispositivo: "], style={'font-weight': 'bold'}),
