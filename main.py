@@ -94,16 +94,28 @@ final_html = html.Div(
                 html.Div(id='my-output')
             ], style={'display': 'flex', 'flex-direction': 'column', 'width': '100%'}),
 
+            html.H3('Desempenho'),
             html.Div([
-                html.H3('Desempenho'),
-                html.Label('grafico1'),
-                dcc.Graph(id='graph1', animate=True),
-
-                html.Label('grafico2'),
-                dcc.Graph(id='graph2', animate=True),
-
+                dcc.Graph(style={'width': '50%', 'height': '50%'}, id='graph1', animate=True),
+                dcc.Graph(style={'width': '50%', 'height': '50%'}, id='graph2', animate=True)
             ], style={'display': 'flex',
-                      'flex-direction': 'column',
+                      'flex-direction': 'row',
+                      'width': '100%',
+                      }),
+
+            html.Div([
+                dcc.Graph(style={'width': '50%', 'height': '50%'}, id='graph3', animate=True),
+                dcc.Graph(style={'width': '50%', 'height': '50%'}, id='graph4', animate=True)
+            ], style={'display': 'flex',
+                      'flex-direction': 'row',
+                      'width': '100%',
+                      }),
+
+            html.Div([
+                dcc.Graph(style={'width': '50%', 'height': '50%'}, id='graph5', animate=True),
+                dcc.Graph(style={'width': '50%', 'height': '50%'}, id='graph6', animate=True)
+            ], style={'display': 'flex',
+                      'flex-direction': 'row',
                       'width': '100%',
                       })
 
@@ -135,6 +147,7 @@ def update_graph1(n):
     # hora_formatada = data_hora_atual.strftime("%H:%M:%S")
     x.append(data_hora_atual)
     y.append(int(get_snmp_data('1.3.6.1.2.1.5.21.0')))
+
 
     data = plotly.graph_objs.Scatter(
         x=list(x),
