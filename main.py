@@ -74,7 +74,6 @@ def get_snmp_data(oid):
             return var_bind[1]
 
 
-# Função para realizar a consulta SNMP usando bulkCmd
 def get_snmp_bulk(oid):
     # Criar a lista de OIDs para todas as interfaces
     oids_to_query = [f'{oid}.{i}' for i in range(1, if_number_object + 1)]
@@ -361,9 +360,16 @@ def update_data(n):
 
     n_interfaces = get_snmp_data(oids['ifNumber'])
 
+    local = decode(get_snmp_data('1.3.6.1.2.1.1.6.0'))
+
+    if local == '':
+        local = 'None'
+
     dump = html.Div([
         html.Label(["Nome do dispositivo: "], style={'font-weight': 'bold'}),
         html.Label(f"{decode(nome)}"),
+        html.Br(),
+        html.Label(["Localização: "], style={'font-weight': 'bold'}), html.Label(f"{local}"),
         html.Br(),
         html.Label(["Número de interfaces presentes no sistema: "], style={'font-weight': 'bold'}),
         html.Label(f"{n_interfaces}"),
@@ -375,6 +381,7 @@ def update_data(n):
         html.Label(["Tempo Ativo do Sistema: "], style={'font-weight': 'bold'}),
         html.Label(f"{dias} dias, {horas} horas, {minutos} minutos e {segundos} segundos"),
         html.Br(),
+
 
     ], )
 
