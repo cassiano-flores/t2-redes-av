@@ -188,6 +188,8 @@ x4 = deque(maxlen=20)
 y4 = deque(maxlen=20)
 x5 = deque(maxlen=20)
 y5 = deque(maxlen=20)
+x6 = deque(maxlen=20)
+y6 = deque(maxlen=20)
 
 
 @app.callback(
@@ -302,7 +304,7 @@ def update_graph4(n):
     Output('graph5', 'figure'),
     [Input('my-input', 'n_intervals')]
 )
-def update_graph4(n):
+def update_graph5(n):
     tempo_atual_em_segundos = time.time()
     data_hora_atual = datetime.fromtimestamp(tempo_atual_em_segundos)
     # hora_formatada = data_hora_atual.strftime("%H:%M:%S")
@@ -325,6 +327,32 @@ def update_graph4(n):
 
     return {'data': [data], 'layout': layout}
 
+@app.callback(
+    Output('graph6', 'figure'),
+    [Input('my-input', 'n_intervals')]
+)
+def update_graph6(n):
+    tempo_atual_em_segundos = time.time()
+    data_hora_atual = datetime.fromtimestamp(tempo_atual_em_segundos)
+    # hora_formatada = data_hora_atual.strftime("%H:%M:%S")
+    x6.append(data_hora_atual)
+    y6.append(int(porcentagem_datagramas_ip_recebidos_erro()))
+
+
+    data = plotly.graph_objs.Scatter(
+        x=list(x6),
+        y=list(y6),
+        name='Scatter',
+        mode='lines+markers'
+    )
+
+    layout = go.Layout(
+        title='Taxa de forwarding de datagramas IP por Segundo',
+        xaxis=dict(title='Tempo (hh:mm:ss)', range=[min(x6), max(x6)]),
+        yaxis=dict(title='Taxa de forwarding', range=[min(y6), max(y6)]),
+    )
+
+    return {'data': [data], 'layout': layout}
 
 @app.callback(
     Output(component_id='my-output', component_property='children'),
@@ -371,6 +399,8 @@ def update_data(n):
 # ******************************* Métricas *******************************
 ifNumberObject = int(get_snmp_data(oids['ifNumber']))
 interval_time = 5
+second_time = time.time()
+first_time = int(time.time() - interval_time)
 
 def porcentagem_pacotes_recebidos_erro():
     if_in_errors = sum(get_snmp_bulk(oids['ifInErrors']))
@@ -385,8 +415,6 @@ def porcentagem_pacotes_recebidos_erro():
 def taxa_bytes_segundo():
     if_in_octets = sum(get_snmp_bulk(oids['ifInOctets']))
     if_out_octets = sum(get_snmp_bulk(oids['ifOutOctets']))
-    second_time = time.time()
-    first_time = int(time.time() - interval_time)
 
     return ((((if_in_octets + if_out_octets) * second_time) - ((if_in_octets + if_out_octets) * first_time)) /
             (second_time - first_time))
@@ -402,6 +430,11 @@ def porcentagem_datagramas_ip_recebidos_erro():
     ip_in_receives = get_snmp_data(oids['ipInReceives'])
 
     return ((ip_in_hdr_errors + ip_in_addr_errors + ip_in_unknown_protos) / ip_in_receives) * 100
+
+def taxa_forwarding_segundo():
+    ip_forw_datagrams = get_snmp_data(oids['ipForwDatagrams'])
+
+    return ((ip_forw_datagrams * second_time) - (ip_forw_datagrams * first_time)) / (second_time - first_time)
 
 if __name__ == '__main__':
     app.run_server(host='127.0.0.1', port=8080, debug=True)
