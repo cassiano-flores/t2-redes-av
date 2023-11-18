@@ -1,3 +1,10 @@
+# SNMP Manager
+#
+# Integrantes:
+# - Cassiano Luis Flores Michel
+# - José Eduardo Serpa Rodrigues
+# - Pedro Menuzzi Mascaró
+
 import dash
 from dash.dependencies import Output, Input
 from dash import dcc
@@ -9,22 +16,15 @@ import time
 from datetime import datetime
 from pysnmp.hlapi import *
 
-# SNMP Manager
-#
-# Integrantes:
-# - Cassiano Luis Flores Michel
-# - José Eduardo Serpa Rodrigues
-# - Pedro Menuzzi Mascaró
-
 # SNMP parameters
 community = 'public'
 host = 'localhost'
 port = 161
 
 oids = {
-    'ifInErrors': '1.3.6.1.2.1.2.2.1.14.1',  # Número de pacotes recebidos com erro.
-    'ifOutOctets': '1.3.6.1.2.1.2.2.1.16.1',  # Número de bytes transmitidos por segundo.
-    'ifSpeed': '1.3.6.1.2.1.2.2.1.5.1',  # Velocidade do link.
+    'ifNumber': '1.3.6.1.2.1.2.1.0',
+    'ifInErrors': '1.3.6.1.2.1.2.2.1.14',  # Número de pacotes recebidos com erro.
+    'ifSpeed': '1.3.6.1.2.1.2.2.1.5',  # Velocidade do link.
     'ipInDiscards': '1.3.6.1.2.1.4.3.0',  # Porcentagem de datagramas IP recebidos com erro.
     'ipForwDatagrams': '1.3.6.1.2.1.4.6.0',  # Taxa de forwarding de datagramas IP por segundo
     'tcpInSegs': '1.3.6.1.2.1.6.10.0',  # Número de segmentos TCP recebidos
@@ -44,6 +44,10 @@ oids = {
     'icmpOutEchoReps': '1.3.6.1.2.1.5.22.0',  # Número de respostas de eco ICMP transmitidas.
     'snmpInPkts': '1.3.6.1.2.1.11.1.0',  # Número de pacotes SNMP recebidos.
     'snmpOutPkts': '1.3.6.1.2.1.11.2.0',  # Número de pacotes SNMP transmitidos.
+    'ifInUcastPkts': '1.3.6.1.2.1.2.2.1.11',
+    'ifInNUcastPkts': '1.3.6.1.2.1.2.2.1.12',
+    'ifInOctets': '1.3.6.1.2.1.2.2.1.10',
+    'ifOutOctets': '1.3.6.1.2.1.2.2.1.16',
 }
 
 # Configurações de Gráficos
@@ -74,6 +78,54 @@ def get_snmp_data(oid):
     else:
         for var_bind in var_binds:
             return var_bind[1]
+
+
+# Número interfaces
+ifNumberObject = int(get_snmp_data(oids['ifNumber']))
+
+
+# Função para realizar a consulta SNMP usando bulkCmd
+def snmp_bulk_get(oid):
+    # Criar a lista de OIDs para todas as interfaces
+    oids_to_query = [f'{oid}.{i}' for i in range(1, ifNumberObject + 1)]
+
+    # Consulta SNMP usando bulkCmd
+    iterator = bulkCmd(
+        SnmpEngine(),
+        CommunityData(community, mpModel=0),
+        UdpTransportTarget((host, port)),
+        ContextData(),
+        0, 25,  # Non-repeaters and max-repetitions
+        *[
+            ObjectType(ObjectIdentity(oid)) for oid in oids_to_query
+        ]
+    )
+
+    error_indication, error_status, error_index, var_binds_table = next(iterator)
+
+    if error_indication:
+        print(f'Error indication: {error_indication}')
+        return None
+    elif error_status:
+        print(f'Error status: {error_status.prettyPrint()} at {error_index}')
+        return None
+    else:
+        # Extrair os valores para todas as interfaces
+        values_for_interfaces = [int(var_bind[1]) for var_bind in var_binds_table]
+
+        return values_for_interfaces
+
+
+# ******************************* Métricas *******************************
+def porcentagem_pacotes_recebidos_erro():
+    if_in_errors_object = sum(snmp_bulk_get(oids['ifInErrors']))
+    if_in_ucast_pkts_object = sum(snmp_bulk_get(oids['ifInUcastPkts']))
+    if_in_n_ucast_pkts_object = sum(snmp_bulk_get(oids['ifInNUcastPkts']))
+
+    if (if_in_ucast_pkts_object + if_in_n_ucast_pkts_object) > 0:
+        return if_in_errors_object / (if_in_ucast_pkts_object + if_in_n_ucast_pkts_object)
+
+    return if_in_errors_object
 
 
 app = dash.Dash(__name__)
@@ -137,6 +189,7 @@ def decode(string):
 x = deque(maxlen=20)
 y = deque(maxlen=20)
 
+
 @app.callback(
     Output('graph1', 'figure'),
     [Input('my-input', 'n_intervals')]
@@ -148,7 +201,6 @@ def update_graph1(n):
     x.append(data_hora_atual)
     y.append(int(get_snmp_data('1.3.6.1.2.1.5.21.0')))
 
-
     data = plotly.graph_objs.Scatter(
         x=list(x),
         y=list(y),
@@ -158,11 +210,11 @@ def update_graph1(n):
 
     layout = go.Layout(
         title='Requisições ICMP ECHO Recebidas',
-        xaxis=dict(title='Tempo',range=[min(x), max(x)]),
-        yaxis=dict(title='Requisições',range=[min(y), max(y)]),
+        xaxis=dict(title='Tempo', range=[min(x), max(x)]),
+        yaxis=dict(title='Requisições', range=[min(y), max(y)]),
     )
 
-    return {'data': [data], 'layout': layout }
+    return {'data': [data], 'layout': layout}
 
 
 @app.callback(
