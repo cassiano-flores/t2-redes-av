@@ -22,6 +22,10 @@ host = 'localhost'
 port = 161
 
 oids = {
+    'ipInHdrErrors': '1.3.6.1.2.1.4.4.0',
+    'ipInAddrErrors': '1.3.6.1.2.1.4.5.0',
+    'ipInUnknownProtos': '1.3.6.1.2.1.4.7.0',
+    'ipInReceives': '1.3.6.1.2.1.4.3.0',
     'ifNumber': '1.3.6.1.2.1.2.1.0',
     'ifInErrors': '1.3.6.1.2.1.2.2.1.14',  # Número de pacotes recebidos com erro.
     'ifSpeed': '1.3.6.1.2.1.2.2.1.5',  # Velocidade do link.
@@ -182,6 +186,8 @@ x3 = deque(maxlen=20)
 y3 = deque(maxlen=20)
 x4 = deque(maxlen=20)
 y4 = deque(maxlen=20)
+x5 = deque(maxlen=20)
+y5 = deque(maxlen=20)
 
 
 @app.callback(
@@ -292,6 +298,33 @@ def update_graph4(n):
 
     return {'data': [data], 'layout': layout}
 
+@app.callback(
+    Output('graph5', 'figure'),
+    [Input('my-input', 'n_intervals')]
+)
+def update_graph4(n):
+    tempo_atual_em_segundos = time.time()
+    data_hora_atual = datetime.fromtimestamp(tempo_atual_em_segundos)
+    # hora_formatada = data_hora_atual.strftime("%H:%M:%S")
+    x5.append(data_hora_atual)
+    y5.append(int(porcentagem_datagramas_ip_recebidos_erro()))
+
+
+    data = plotly.graph_objs.Scatter(
+        x=list(x5),
+        y=list(y5),
+        name='Scatter',
+        mode='lines+markers'
+    )
+
+    layout = go.Layout(
+        title='Porcentagem de datagramas IP recebidos com erro em relação ao total de datagramas IP recebidos',
+        xaxis=dict(title='Tempo (hh:mm:ss)', range=[min(x5), max(x5)]),
+        yaxis=dict(title='%', range=[min(y5), max(y5)]),
+    )
+
+    return {'data': [data], 'layout': layout}
+
 
 @app.callback(
     Output(component_id='my-output', component_property='children'),
@@ -361,6 +394,14 @@ def taxa_bytes_segundo():
 def utilizacao_link():
     if_speed = sum(get_snmp_bulk(oids['ifSpeed']))
     return (taxa_bytes_segundo() * 8) / if_speed
+
+def porcentagem_datagramas_ip_recebidos_erro():
+    ip_in_hdr_errors = get_snmp_data(oids['ipInHdrErrors'])
+    ip_in_addr_errors = get_snmp_data(oids['ipInAddrErrors'])
+    ip_in_unknown_protos = get_snmp_data(oids['ipInUnknownProtos'])
+    ip_in_receives = get_snmp_data(oids['ipInReceives'])
+
+    return ((ip_in_hdr_errors + ip_in_addr_errors + ip_in_unknown_protos) / ip_in_receives) * 100
 
 if __name__ == '__main__':
     app.run_server(host='127.0.0.1', port=8080, debug=True)
