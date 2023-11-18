@@ -27,31 +27,21 @@ oids = {
     'ipInUnknownProtos': '1.3.6.1.2.1.4.7.0',
     'ipInReceives': '1.3.6.1.2.1.4.3.0',
     'ifNumber': '1.3.6.1.2.1.2.1.0',
-    'ifInErrors': '1.3.6.1.2.1.2.2.1.14',  # Número de pacotes recebidos com erro.
-    'ifSpeed': '1.3.6.1.2.1.2.2.1.5',  # Velocidade do link.
-    'ipInDiscards': '1.3.6.1.2.1.4.3.0',  # Porcentagem de datagramas IP recebidos com erro.
-    'ipForwDatagrams': '1.3.6.1.2.1.4.6.0',  # Taxa de forwarding de datagramas IP por segundo
-    'tcpInSegs': '1.3.6.1.2.1.6.10.0',  # Número de segmentos TCP recebidos
-    'tcpOutSegs': '1.3.6.1.2.1.6.11.0',  # Número de segmentos TCP transmitidos
-    'udpInDatagrams': '1.3.6.1.2.1.7.1.0',  # Número de datagramas UDP recebidos
-    'udpOutDatagrams': '1.3.6.1.2.1.7.4.0',  # Número de datagramas UDP transmitidos
-    'sysUpTime': '1.3.6.1.2.1.1.3.0',  # Tempo desde a última reinicialização do agente.
-    'sysLocation': '1.3.6.1.2.1.1.6.0',  # Localização física do agente.
-    'sysContact': '1.3.6.1.2.1.1.4.0',  # Informações de contato do administrador do sistema.
-    'sysName': '1.3.6.1.2.1.1.5.0',  # Nome do sistema.
-    'sysDescr': '1.3.6.1.2.1.1.1.0',  # Descrição do sistema.
-    'ifTable': '1.3.6.1.2.1.2.2',  # Tabela de interfaces de rede.
-    'ipAddrTable': '1.3.6.1.2.1.4.20',  # Tabela de endereços IP
-    'ipRouteTable': '1.3.6.1.2.1.4.21',  # Tabela de rotas IP
-    'tcpConnTable': '1.3.6.1.2.1.6.13',  # Tabela de conexões TCP
-    'icmpInEchoReps': '1.3.6.1.2.1.5.21.0',  # Número de respostas de eco ICMP recebidas.
-    'icmpOutEchoReps': '1.3.6.1.2.1.5.22.0',  # Número de respostas de eco ICMP transmitidas.
-    'snmpInPkts': '1.3.6.1.2.1.11.1.0',  # Número de pacotes SNMP recebidos.
-    'snmpOutPkts': '1.3.6.1.2.1.11.2.0',  # Número de pacotes SNMP transmitidos.
+    'ifInErrors': '1.3.6.1.2.1.2.2.1.14',
+    'ifSpeed': '1.3.6.1.2.1.2.2.1.5',
+    'ipForwDatagrams': '1.3.6.1.2.1.4.6.0',
+    'sysUpTime': '1.3.6.1.2.1.1.3.0',
+    'sysName': '1.3.6.1.2.1.1.5.0',
+    'sysDescr': '1.3.6.1.2.1.1.1.0',
+    'icmpInEchoReps': '1.3.6.1.2.1.5.21.0',
     'ifInUcastPkts': '1.3.6.1.2.1.2.2.1.11',
     'ifInNUcastPkts': '1.3.6.1.2.1.2.2.1.12',
     'ifInOctets': '1.3.6.1.2.1.2.2.1.10',
     'ifOutOctets': '1.3.6.1.2.1.2.2.1.16',
+    'ifTable': '1.3.6.1.2.1.2.2',
+    'ipAddrTable': '1.3.6.1.2.1.4.20',
+    'ipRouteTable': '1.3.6.1.2.1.4.21',
+    'tcpConnTable': '1.3.6.1.2.1.6.13',
 }
 
 # Configurações de Gráficos
@@ -84,11 +74,10 @@ def get_snmp_data(oid):
             return var_bind[1]
 
 
-
 # Função para realizar a consulta SNMP usando bulkCmd
 def get_snmp_bulk(oid):
     # Criar a lista de OIDs para todas as interfaces
-    oids_to_query = [f'{oid}.{i}' for i in range(1, ifNumberObject + 1)]
+    oids_to_query = [f'{oid}.{i}' for i in range(1, if_number_object + 1)]
 
     # Consulta SNMP usando bulkCmd
     iterator = bulkCmd(
@@ -115,9 +104,6 @@ def get_snmp_bulk(oid):
         values_for_interfaces = [int(var_bind[1]) if var_bind[1] else 0 for var_bind in var_binds_table]
 
         return values_for_interfaces
-
-
-
 
 
 app = dash.Dash(__name__)
@@ -201,7 +187,7 @@ def update_graph1(n):
     data_hora_atual = datetime.fromtimestamp(tempo_atual_em_segundos)
     # hora_formatada = data_hora_atual.strftime("%H:%M:%S")
     x1.append(data_hora_atual)
-    y1.append(int(get_snmp_data('1.3.6.1.2.1.5.21.0')))
+    y1.append(int(get_snmp_data(oids['icmpInEchoReps'])))
 
     data = plotly.graph_objs.Scatter(
         x=list(x1),
@@ -218,6 +204,7 @@ def update_graph1(n):
 
     return {'data': [data], 'layout': layout}
 
+
 @app.callback(
     Output('graph2', 'figure'),
     [Input('my-input', 'n_intervals')]
@@ -228,7 +215,6 @@ def update_graph2(n):
     # hora_formatada = data_hora_atual.strftime("%H:%M:%S")
     x2.append(data_hora_atual)
     y2.append(porcentagem_pacotes_recebidos_erro())
-
 
     data = plotly.graph_objs.Scatter(
         x=list(x2),
@@ -255,8 +241,7 @@ def update_graph3(n):
     data_hora_atual = datetime.fromtimestamp(tempo_atual_em_segundos)
     # hora_formatada = data_hora_atual.strftime("%H:%M:%S")
     x3.append(data_hora_atual)
-    y3.append(int(taxa_bytes_segundo()/1000000))
-
+    y3.append(int(taxa_bytes_segundo() / 1000000))
 
     data = plotly.graph_objs.Scatter(
         x=list(x3),
@@ -273,6 +258,7 @@ def update_graph3(n):
 
     return {'data': [data], 'layout': layout}
 
+
 @app.callback(
     Output('graph4', 'figure'),
     [Input('my-input', 'n_intervals')]
@@ -283,7 +269,6 @@ def update_graph4(n):
     # hora_formatada = data_hora_atual.strftime("%H:%M:%S")
     x4.append(data_hora_atual)
     y4.append(int(utilizacao_link() * 100))
-
 
     data = plotly.graph_objs.Scatter(
         x=list(x4),
@@ -300,6 +285,7 @@ def update_graph4(n):
 
     return {'data': [data], 'layout': layout}
 
+
 @app.callback(
     Output('graph5', 'figure'),
     [Input('my-input', 'n_intervals')]
@@ -310,7 +296,6 @@ def update_graph5(n):
     # hora_formatada = data_hora_atual.strftime("%H:%M:%S")
     x5.append(data_hora_atual)
     y5.append(int(porcentagem_datagramas_ip_recebidos_erro()))
-
 
     data = plotly.graph_objs.Scatter(
         x=list(x5),
@@ -327,6 +312,7 @@ def update_graph5(n):
 
     return {'data': [data], 'layout': layout}
 
+
 @app.callback(
     Output('graph6', 'figure'),
     [Input('my-input', 'n_intervals')]
@@ -337,7 +323,6 @@ def update_graph6(n):
     # hora_formatada = data_hora_atual.strftime("%H:%M:%S")
     x6.append(data_hora_atual)
     y6.append(int(porcentagem_datagramas_ip_recebidos_erro()))
-
 
     data = plotly.graph_objs.Scatter(
         x=list(x6),
@@ -354,26 +339,27 @@ def update_graph6(n):
 
     return {'data': [data], 'layout': layout}
 
+
 @app.callback(
     Output(component_id='my-output', component_property='children'),
     Input(component_id='my-input', component_property='n_intervals')
 )
 def update_data(n):
-    sysDescrObject = decode(get_snmp_data('1.3.6.1.2.1.1.1.0'))
+    sysDescrObject = decode(get_snmp_data(oids['sysDescr']))
     software = sysDescrObject.split("Software: ")
     hardware = sysDescrObject.split("Software: ")
     hardware = hardware[0]
 
-    total_milissegundos = get_snmp_data('1.3.6.1.2.1.1.3.0')
+    total_milissegundos = get_snmp_data(oids['sysUpTime'])
     total_segundos = total_milissegundos // 100
     dias = total_segundos // (24 * 3600)
     horas = (total_segundos % (24 * 3600)) // 3600
     minutos = (total_segundos % 3600) // 60
     segundos = total_segundos % 60
 
-    nome = get_snmp_data('1.3.6.1.2.1.1.5.0')
+    nome = get_snmp_data(oids['sysName'])
 
-    n_interfaces = get_snmp_data('1.3.6.1.2.1.2.1.0')
+    n_interfaces = get_snmp_data(oids['ifNumber'])
 
     dump = html.Div([
         html.Label(["Nome do dispositivo: "], style={'font-weight': 'bold'}),
@@ -395,12 +381,12 @@ def update_data(n):
     return dump
 
 
-
 # ******************************* Métricas *******************************
-ifNumberObject = int(get_snmp_data(oids['ifNumber']))
+if_number_object = int(get_snmp_data(oids['ifNumber']))
 interval_time = 5
 second_time = time.time()
 first_time = int(time.time() - interval_time)
+
 
 def porcentagem_pacotes_recebidos_erro():
     if_in_errors = sum(get_snmp_bulk(oids['ifInErrors']))
@@ -412,6 +398,7 @@ def porcentagem_pacotes_recebidos_erro():
 
     return if_in_errors
 
+
 def taxa_bytes_segundo():
     if_in_octets = sum(get_snmp_bulk(oids['ifInOctets']))
     if_out_octets = sum(get_snmp_bulk(oids['ifOutOctets']))
@@ -419,9 +406,12 @@ def taxa_bytes_segundo():
     return ((((if_in_octets + if_out_octets) * second_time) - ((if_in_octets + if_out_octets) * first_time)) /
             (second_time - first_time))
 
+
 def utilizacao_link():
     if_speed = sum(get_snmp_bulk(oids['ifSpeed']))
+
     return (taxa_bytes_segundo() * 8) / if_speed
+
 
 def porcentagem_datagramas_ip_recebidos_erro():
     ip_in_hdr_errors = get_snmp_data(oids['ipInHdrErrors'])
@@ -431,10 +421,12 @@ def porcentagem_datagramas_ip_recebidos_erro():
 
     return ((ip_in_hdr_errors + ip_in_addr_errors + ip_in_unknown_protos) / ip_in_receives) * 100
 
+
 def taxa_forwarding_segundo():
     ip_forw_datagrams = get_snmp_data(oids['ipForwDatagrams'])
 
     return ((ip_forw_datagrams * second_time) - (ip_forw_datagrams * first_time)) / (second_time - first_time)
+
 
 if __name__ == '__main__':
     app.run_server(host='127.0.0.1', port=8080, debug=True)
