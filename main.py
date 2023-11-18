@@ -6,6 +6,7 @@ import plotly
 import plotly.graph_objs as go
 from collections import deque
 import time
+from datetime import datetime
 from pysnmp.hlapi import *
 
 # SNMP Manager
@@ -96,10 +97,10 @@ final_html = html.Div(
             html.Div([
                 html.H3('Desempenho'),
                 html.Label('grafico1'),
-                dcc.Graph(id='live-graph', animate=True),
+                dcc.Graph(id='graph1', animate=True),
 
                 html.Label('grafico2'),
-                dcc.Graph(id='live-graph2', animate=True),
+                dcc.Graph(id='graph2', animate=True),
 
             ], style={'display': 'flex',
                       'flex-direction': 'column',
@@ -108,7 +109,7 @@ final_html = html.Div(
 
         ], style={'display': 'flex', 'flex-direction': 'column'}),
 
-    ], style={'display': 'flex', 'flex-direction': 'column', 'font-family':'Roboto thin'}
+    ], style={'display': 'flex', 'flex-direction': 'column', 'font-family': 'Roboto thin'}
 
 )
 app.layout = final_html
@@ -119,6 +120,36 @@ def decode(string):
     for c in string:
         string_final += chr(c)
     return string_final
+
+
+x = deque(maxlen=20)
+y = deque(maxlen=20)
+
+@app.callback(
+    Output('graph1', 'figure'),
+    [Input('my-input', 'n_intervals')]
+)
+def update_graph1(n):
+    tempo_atual_em_segundos = time.time()
+    data_hora_atual = datetime.fromtimestamp(tempo_atual_em_segundos)
+    # hora_formatada = data_hora_atual.strftime("%H:%M:%S")
+    x.append(data_hora_atual)
+    y.append(int(get_snmp_data('1.3.6.1.2.1.5.21.0')))
+
+    data = plotly.graph_objs.Scatter(
+        x=list(x),
+        y=list(y),
+        name='Scatter',
+        mode='lines+markers'
+    )
+
+    layout = go.Layout(
+        title='Requisições ICMP ECHO Recebidas',
+        xaxis=dict(title='Tempo',range=[min(x), max(x)]),
+        yaxis=dict(title='Requisições',range=[min(y), max(y)]),
+    )
+
+    return {'data': [data], 'layout': layout }
 
 
 @app.callback(
@@ -151,11 +182,12 @@ def update_data(n):
         html.Label(["Número de interfaces presentes no sistema: "], style={'font-weight': 'bold'}),
         html.Label(f"{n_interfaces}"),
         html.Br(),
-        html.Label(["Hardware: "], style={'font-weight': 'bold'}), html.Label(f"{hardware[10:len(hardware)-2]}"),
+        html.Label(["Hardware: "], style={'font-weight': 'bold'}), html.Label(f"{hardware[10:len(hardware) - 2]}"),
         html.Br(),
         html.Label(["Software: "], style={'font-weight': 'bold'}), html.Label(f"{software[1]}"),
         html.Br(),
-        html.Label(["Tempo Ativo do Sistema: "], style={'font-weight': 'bold'}), html.Label(f"{dias} dias, {horas} horas, {minutos} minutos e {segundos} segundos"),
+        html.Label(["Tempo Ativo do Sistema: "], style={'font-weight': 'bold'}),
+        html.Label(f"{dias} dias, {horas} horas, {minutos} minutos e {segundos} segundos"),
         html.Br(),
 
     ], )
