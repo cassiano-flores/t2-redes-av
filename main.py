@@ -156,11 +156,6 @@ final_html = html.Div(
             n_intervals=0
         ),
 
-        html.H1('Agente inativo! Tentando reconexão...',
-                style={'color': f"{agentStatus['color']}", 'width': '100%', 'justify-content': 'center',
-                       'text-align': 'center', 'position': 'absolute', 'background': f"{agentStatus['background']}",
-                       'z-index': f"{agentStatus['index']}"}),
-
         html.H1('Simple Network Management Protocol - Monitores de Recurso e Desempenho',
                 style={'width': '100%', 'justify-content': 'center', 'text-align': 'center'}),
 
@@ -432,8 +427,16 @@ def update_data(n):
 
     table_html = html.Div([title_table, content_table])
 
+    global countTime
+    global agentStatus
+
     # Informações
     dump = html.Div([
+        html.H1('Agente inativo! Tentando reconexão...',
+                style={'color': f"{agentStatus['color']}", 'width': '100%', 'justify-content': 'center',
+                       'text-align': 'center', 'position': 'absolute', 'top': '2%',
+                       'background': f"{agentStatus['background']}",
+                       'z-index': f"{agentStatus['index']}"}),
         html.Label(["Nome do dispositivo: "], style={'font-weight': 'bold'}),
         html.Label(f"{decode(nome)}"),
         html.Br(),
@@ -461,9 +464,6 @@ def update_data(n):
         table_html
     ], style={'display': 'flex', 'flex-direction': 'column', 'height': '80%', 'justify-content': 'center',
               'text-align': 'center'})
-
-    global countTime
-    global agentStatus
 
     # Quando der 6 ciclos, ou seja, 30 segundos, verifica sysUpTime do agente
     if countTime > 5:
