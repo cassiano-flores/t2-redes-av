@@ -1,14 +1,12 @@
 # SNMP Manager
-#
+
 # Integrantes:
 # - Cassiano Luis Flores Michel
 # - José Eduardo Serpa Rodrigues
 # - Pedro Menuzzi Mascaró
 
 import dash
-from dash.dependencies import Output, Input
-from dash import dcc
-from dash import html
+from dash import dcc, html, Input, Output
 import plotly
 import plotly.graph_objs as go
 from collections import deque
@@ -21,35 +19,46 @@ community = 'public'
 host = 'localhost'
 port = 161
 
+# Objetos utilizados no gerente
 oids = {
-    'ipInHdrErrors': '1.3.6.1.2.1.4.4.0',
-    'ipInAddrErrors': '1.3.6.1.2.1.4.5.0',
-    'ipInUnknownProtos': '1.3.6.1.2.1.4.7.0',
-    'ipInReceives': '1.3.6.1.2.1.4.3.0',
+    'sysInformations': '1.3.6.1.2.1.1',
+    'sysDescr': '1.3.6.1.2.1.1.1.0',
+    'sysObjectID': '1.3.6.1.2.1.1.2.0',
+    'sysUpTime': '1.3.6.1.2.1.1.3.0',
+    'sysContact': '1.3.6.1.2.1.1.4.0',
+    'sysName': '1.3.6.1.2.1.1.5.0',
+    'sysLocation': '1.3.6.1.2.1.1.6.0',
+    'sysServices': '1.3.6.1.2.1.1.7.0',
     'ifNumber': '1.3.6.1.2.1.2.1.0',
     'ifInErrors': '1.3.6.1.2.1.2.2.1.14',
     'ifSpeed': '1.3.6.1.2.1.2.2.1.5',
-    'ipForwDatagrams': '1.3.6.1.2.1.4.6.0',
-    'sysUpTime': '1.3.6.1.2.1.1.3.0',
-    'sysName': '1.3.6.1.2.1.1.5.0',
-    'sysDescr': '1.3.6.1.2.1.1.1.0',
-    'icmpInEchoReps': '1.3.6.1.2.1.5.21.0',
     'ifInUcastPkts': '1.3.6.1.2.1.2.2.1.11',
     'ifInNUcastPkts': '1.3.6.1.2.1.2.2.1.12',
     'ifInOctets': '1.3.6.1.2.1.2.2.1.10',
     'ifOutOctets': '1.3.6.1.2.1.2.2.1.16',
-    'ifTable': '1.3.6.1.2.1.2.2',
-    'ipAddrTable': '1.3.6.1.2.1.4.20',
-    'ipRouteTable': '1.3.6.1.2.1.4.21',
-    'tcpConnTable': '1.3.6.1.2.1.6.13',
+    'ifName': '1.3.6.1.2.1.31.1.1.1.1',
+    'ipInHdrErrors': '1.3.6.1.2.1.4.4.0',
+    'ipInAddrErrors': '1.3.6.1.2.1.4.5.0',
+    'ipInUnknownProtos': '1.3.6.1.2.1.4.7.0',
+    'ipInReceives': '1.3.6.1.2.1.4.3.0',
+    'ipForwDatagrams': '1.3.6.1.2.1.4.6.0',
+    'icmpInEchoReps': '1.3.6.1.2.1.5.21.0',
 }
 
 # Configurações de Gráficos
 X = []
 Y = {key: [] for key in oids}
 
+countTime = 0
+agentStatus = {
+    'index': -1,
+    'background': 'transparent',
+    'color': 'transparent'
+}
 
-def get_snmp_data(oid):
+
+# Funções snmpget (recupera um em específico), snmpbulkget e snmpwalk
+def snmpget(oid):
     iterator = getCmd(
         SnmpEngine(),
         CommunityData(community, mpModel=0),
@@ -74,7 +83,7 @@ def get_snmp_data(oid):
             return var_bind[1]
 
 
-def get_snmp_bulk(oid, isint=True):
+def snmpbulkget(oid, isint=True):
     # Criar a lista de OIDs para todas as interfaces
     oids_to_query = [f'{oid}.{i}' for i in range(1, if_number_object + 1)]
 
@@ -84,7 +93,7 @@ def get_snmp_bulk(oid, isint=True):
         CommunityData(community, mpModel=0),
         UdpTransportTarget((host, port)),
         ContextData(),
-        0, 25,  # Non-repeaters and max-repetitions
+        0, 25,
         *[
             ObjectType(ObjectIdentity(oid)) for oid in oids_to_query
         ]
@@ -108,6 +117,36 @@ def get_snmp_bulk(oid, isint=True):
         return values_for_interfaces
 
 
+def snmpwalk(oid):
+    iterator = nextCmd(
+        SnmpEngine(),
+        CommunityData(community, mpModel=0),
+        UdpTransportTarget((host, port)),
+        ContextData(),
+        ObjectType(ObjectIdentity(oid)),
+        lexicographicMode=False  # Desativa o modo lexicográfico para um walk
+    )
+
+    results = []
+
+    for error_indication, error_status, error_index, var_binds_table in iterator:
+        if error_indication:
+            print(error_indication)
+            return None
+        elif error_status:
+            print('%s at %s' % (
+                error_status.prettyPrint(),
+                error_index and var_binds_table[int(error_index) - 1][0] or '?'
+            ))
+            return None
+        else:
+            for var_bind in var_binds_table:
+                results.append(var_bind[1])
+
+    return results
+
+
+# Estrutura básica
 app = dash.Dash(__name__)
 final_html = html.Div(
     [
@@ -117,16 +156,24 @@ final_html = html.Div(
             n_intervals=0
         ),
 
-        html.H1('Simple Network Management Protocol - Monitores de Recurso e Desempenho'),
+        html.H1('Agente inativo! Tentando reconexão...',
+                style={'color': f"{agentStatus['color']}", 'width': '100%', 'justify-content': 'center',
+                       'text-align': 'center', 'position': 'absolute', 'background': f"{agentStatus['background']}",
+                       'z-index': f"{agentStatus['index']}"}),
+
+        html.H1('Simple Network Management Protocol - Monitores de Recurso e Desempenho',
+                style={'width': '100%', 'justify-content': 'center', 'text-align': 'center'}),
 
         html.Div([
 
             html.Div([
-                html.H3('Info'),
+                html.H2('Informações', style={'width': '100%', 'justify-content': 'center', 'text-align': 'center',
+                                              'border': 'solid 2px black'}),
                 html.Div(id='my-output')
             ], style={'display': 'flex', 'flex-direction': 'column', 'width': '100%'}),
 
-            html.H3('Desempenho'),
+            html.H2('Desempenho', style={'width': '100%', 'justify-content': 'center', 'text-align': 'center',
+                                         'border': 'solid 2px black'}),
             html.Div([
                 dcc.Graph(style={'width': '50%', 'height': '50%'}, id='graph1', animate=True),
                 dcc.Graph(style={'width': '50%', 'height': '50%'}, id='graph2', animate=True)
@@ -179,7 +226,18 @@ y5 = deque(maxlen=20)
 x6 = deque(maxlen=20)
 y6 = deque(maxlen=20)
 
+# Informações do sistema recuperadas com apenas 1 snmpwalk
+sysInformations = snmpwalk(oids['sysInformations'])
+sysDescr = sysInformations[0]
+sysObjectID = sysInformations[1]
+sysUpTime = sysInformations[2]
+sysContact = sysInformations[3]
+sysName = sysInformations[4]
+sysLocation = sysInformations[5]
+sysServices = sysInformations[6]
 
+
+# Os gráficos abaixo são para Desempenho
 @app.callback(
     Output('graph1', 'figure'),
     [Input('my-input', 'n_intervals')]
@@ -187,9 +245,8 @@ y6 = deque(maxlen=20)
 def update_graph1(n):
     tempo_atual_em_segundos = time.time()
     data_hora_atual = datetime.fromtimestamp(tempo_atual_em_segundos)
-    # hora_formatada = data_hora_atual.strftime("%H:%M:%S")
     x1.append(data_hora_atual)
-    y1.append(int(get_snmp_data(oids['icmpInEchoReps'])))
+    y1.append(int(snmpget(oids['icmpInEchoReps'])))
 
     data = plotly.graph_objs.Scatter(
         x=list(x1),
@@ -214,7 +271,6 @@ def update_graph1(n):
 def update_graph2(n):
     tempo_atual_em_segundos = time.time()
     data_hora_atual = datetime.fromtimestamp(tempo_atual_em_segundos)
-    # hora_formatada = data_hora_atual.strftime("%H:%M:%S")
     x2.append(data_hora_atual)
     y2.append(porcentagem_pacotes_recebidos_erro())
 
@@ -241,7 +297,6 @@ def update_graph2(n):
 def update_graph3(n):
     tempo_atual_em_segundos = time.time()
     data_hora_atual = datetime.fromtimestamp(tempo_atual_em_segundos)
-    # hora_formatada = data_hora_atual.strftime("%H:%M:%S")
     x3.append(data_hora_atual)
     y3.append(int(taxa_bytes_segundo() / 1000000))
 
@@ -268,7 +323,6 @@ def update_graph3(n):
 def update_graph4(n):
     tempo_atual_em_segundos = time.time()
     data_hora_atual = datetime.fromtimestamp(tempo_atual_em_segundos)
-    # hora_formatada = data_hora_atual.strftime("%H:%M:%S")
     x4.append(data_hora_atual)
     y4.append(int(utilizacao_link() * 100))
 
@@ -295,7 +349,6 @@ def update_graph4(n):
 def update_graph5(n):
     tempo_atual_em_segundos = time.time()
     data_hora_atual = datetime.fromtimestamp(tempo_atual_em_segundos)
-    # hora_formatada = data_hora_atual.strftime("%H:%M:%S")
     x5.append(data_hora_atual)
     y5.append(int(porcentagem_datagramas_ip_recebidos_erro()))
 
@@ -307,7 +360,7 @@ def update_graph5(n):
     )
 
     layout = go.Layout(
-        title='Porcentagem de datagramas IP recebidos com erro em relação ao total de datagramas IP recebidos',
+        title='Porcentagem de datagramas IP recebidos com erro',
         xaxis=dict(title='Tempo (hh:mm:ss)', range=[min(x5), max(x5)]),
         yaxis=dict(title='%', range=[min(y5), max(y5)]),
     )
@@ -322,7 +375,6 @@ def update_graph5(n):
 def update_graph6(n):
     tempo_atual_em_segundos = time.time()
     data_hora_atual = datetime.fromtimestamp(tempo_atual_em_segundos)
-    # hora_formatada = data_hora_atual.strftime("%H:%M:%S")
     x6.append(data_hora_atual)
     y6.append(int(porcentagem_datagramas_ip_recebidos_erro()))
 
@@ -347,39 +399,40 @@ def update_graph6(n):
     Input(component_id='my-input', component_property='n_intervals')
 )
 def update_data(n):
-    sysDescrObject = decode(get_snmp_data(oids['sysDescr']))
-    software = sysDescrObject.split("Software: ")
-    hardware = sysDescrObject.split("Software: ")
+    sys_descr_object = decode(sysDescr)
+    software = sys_descr_object.split("Software: ")
+    hardware = sys_descr_object.split("Software: ")
     hardware = hardware[0]
 
-    total_milissegundos = get_snmp_data(oids['sysUpTime'])
+    total_milissegundos = sysUpTime
     total_segundos = total_milissegundos // 100
     dias = total_segundos // (24 * 3600)
     horas = (total_segundos % (24 * 3600)) // 3600
     minutos = (total_segundos % 3600) // 60
     segundos = total_segundos % 60
 
-    nome = get_snmp_data(oids['sysName'])
+    nome = sysName
 
-    n_interfaces = get_snmp_data(oids['ifNumber'])
+    local = 'Unknown' if decode(sysLocation) == '' else decode(sysLocation)
 
-    local = decode(get_snmp_data('1.3.6.1.2.1.1.6.0'))
+    n_interfaces = snmpget(oids['ifNumber'])
 
-    if local == '':
-        local = 'None'
+    servicos = sysServices
 
-    table = get_snmp_bulk('1.3.6.1.2.1.31.1.1.1.1', False)
+    admin_contato = 'None' if decode(sysContact) == '' else decode(sysContact)
 
-    trs = [html.Tr(html.Th('Interfaces de Rede'))]
+    id_sistema = sysObjectID
 
-    for i in range(n_interfaces-1):
-        name = decode(table[i])
-        trs.append( html.Tr(html.Td(f'{name}')) )
+    table = snmpbulkget(oids['ifName'], False)
 
-    table_html = html.Div([
-        html.Table(trs, style={'border': 'solid 2px black'})
-    ])
+    title_table = html.Table([html.Tr(html.Th('Interfaces de Rede:'))], style={'width': '100%'})
 
+    content_trs = [html.Tr(html.Td(f'{decode(table[i])}, ', style={'width': '33%'})) for i in range(n_interfaces - 1)]
+    content_table = html.Table(content_trs, style={'display': 'flex', 'flex-wrap': 'wrap', 'width': '100%'})
+
+    table_html = html.Div([title_table, content_table])
+
+    # Informações
     dump = html.Div([
         html.Label(["Nome do dispositivo: "], style={'font-weight': 'bold'}),
         html.Label(f"{decode(nome)}"),
@@ -396,24 +449,53 @@ def update_data(n):
         html.Label(["Tempo Ativo do Sistema: "], style={'font-weight': 'bold'}),
         html.Label(f"{dias} dias, {horas} horas, {minutos} minutos e {segundos} segundos"),
         html.Br(),
+        html.Label(["Total de serviços que o sistema suporta: "], style={'font-weight': 'bold'}),
+        html.Label(f"{servicos}"),
+        html.Br(),
+        html.Label(["Informações de contato do administrador do sistema: "], style={'font-weight': 'bold'}),
+        html.Label(f"{admin_contato}"),
+        html.Br(),
+        html.Label(["Identificador de objeto do sistema: "], style={'font-weight': 'bold'}),
+        html.Label(f"{id_sistema}"),
+        html.Br(),
         table_html
+    ], style={'display': 'flex', 'flex-direction': 'column', 'height': '80%', 'justify-content': 'center',
+              'text-align': 'center'})
 
-    ], )
+    global countTime
+    global agentStatus
+
+    # Quando der 6 ciclos, ou seja, 30 segundos, verifica sysUpTime do agente
+    if countTime > 5:
+        countTime = 0
+        sys_up_time = snmpget(oids['sysUpTime'])
+
+        # Se o sysUpTime for menor que 1 minuto, significa que caiu, mostrar mensagem
+        if sys_up_time < 60:
+            agentStatus['color'] = 'red'
+            agentStatus['background'] = 'black'
+            agentStatus['index'] = 1
+        else:
+            agentStatus['color'] = 'transparent'
+            agentStatus['background'] = 'transparent'
+            agentStatus['index'] = -1
+    else:
+        countTime += 1
 
     return dump
 
 
 # ******************************* Métricas *******************************
-if_number_object = int(get_snmp_data(oids['ifNumber']))
+if_number_object = int(snmpget(oids['ifNumber']))
 interval_time = 5
 second_time = time.time()
 first_time = int(time.time() - interval_time)
 
 
 def porcentagem_pacotes_recebidos_erro():
-    if_in_errors = sum(get_snmp_bulk(oids['ifInErrors']))
-    if_in_ucast_pkts = sum(get_snmp_bulk(oids['ifInUcastPkts']))
-    if_in_n_ucast_pkts = sum(get_snmp_bulk(oids['ifInNUcastPkts']))
+    if_in_errors = sum(snmpbulkget(oids['ifInErrors']))
+    if_in_ucast_pkts = sum(snmpbulkget(oids['ifInUcastPkts']))
+    if_in_n_ucast_pkts = sum(snmpbulkget(oids['ifInNUcastPkts']))
 
     if (if_in_ucast_pkts + if_in_n_ucast_pkts) > 0:
         return if_in_errors / (if_in_ucast_pkts + if_in_n_ucast_pkts)
@@ -422,30 +504,30 @@ def porcentagem_pacotes_recebidos_erro():
 
 
 def taxa_bytes_segundo():
-    if_in_octets = sum(get_snmp_bulk(oids['ifInOctets']))
-    if_out_octets = sum(get_snmp_bulk(oids['ifOutOctets']))
+    if_in_octets = sum(snmpbulkget(oids['ifInOctets']))
+    if_out_octets = sum(snmpbulkget(oids['ifOutOctets']))
 
     return ((((if_in_octets + if_out_octets) * second_time) - ((if_in_octets + if_out_octets) * first_time)) /
             (second_time - first_time))
 
 
 def utilizacao_link():
-    if_speed = sum(get_snmp_bulk(oids['ifSpeed']))
+    if_speed = sum(snmpbulkget(oids['ifSpeed']))
 
     return (taxa_bytes_segundo() * 8) / if_speed
 
 
 def porcentagem_datagramas_ip_recebidos_erro():
-    ip_in_hdr_errors = get_snmp_data(oids['ipInHdrErrors'])
-    ip_in_addr_errors = get_snmp_data(oids['ipInAddrErrors'])
-    ip_in_unknown_protos = get_snmp_data(oids['ipInUnknownProtos'])
-    ip_in_receives = get_snmp_data(oids['ipInReceives'])
+    ip_in_hdr_errors = snmpget(oids['ipInHdrErrors'])
+    ip_in_addr_errors = snmpget(oids['ipInAddrErrors'])
+    ip_in_unknown_protos = snmpget(oids['ipInUnknownProtos'])
+    ip_in_receives = snmpget(oids['ipInReceives'])
 
     return ((ip_in_hdr_errors + ip_in_addr_errors + ip_in_unknown_protos) / ip_in_receives) * 100
 
 
 def taxa_forwarding_segundo():
-    ip_forw_datagrams = get_snmp_data(oids['ipForwDatagrams'])
+    ip_forw_datagrams = snmpget(oids['ipForwDatagrams'])
 
     return ((ip_forw_datagrams * second_time) - (ip_forw_datagrams * first_time)) / (second_time - first_time)
 
