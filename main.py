@@ -6,7 +6,7 @@
 # - Pedro Menuzzi Mascaró
 
 import dash
-from dash import dcc, html, Input, Output
+from dash import dcc, html, Input, Output, State
 import plotly
 import plotly.graph_objs as go
 from collections import deque
@@ -15,8 +15,18 @@ from datetime import datetime
 from pysnmp.hlapi import *
 
 # SNMP parameters
-community = 'public'
-host = 'localhost'
+devices = {
+    'localhost': {
+        'ip': 'localhost',
+        'community': 'public',
+        'interval_time': 5
+    }
+}
+
+selectedDevice = devices['localhost']
+host = selectedDevice['ip']
+community = selectedDevice['community']
+intervalTime = selectedDevice['interval_time']
 port = 161
 
 # Objetos utilizados no gerente
@@ -49,7 +59,6 @@ oids = {
 X = []
 Y = {key: [] for key in oids}
 
-countTime = 0
 agentStatus = {
     'index': -1,
     'background': 'transparent',
@@ -152,12 +161,41 @@ final_html = html.Div(
     [
         dcc.Interval(
             id='my-input',
-            interval=5 * 1000,
+            interval=int(intervalTime) * 1000,
             n_intervals=0
         ),
 
         html.H1('Simple Network Management Protocol - Monitores de Recurso e Desempenho',
                 style={'width': '100%', 'justify-content': 'center', 'text-align': 'center'}),
+
+        html.Div([
+            html.H2("Adição de Dispositivos:"),
+
+            html.Label("IP:"),
+            dcc.Input(id='device-name', type='text'),
+
+            html.Label("Comunidade:"),
+            dcc.Input(id='device-location', type='text'),
+
+            html.Label("Periodicidade (s):"),
+            dcc.Input(id='device-interfaces', type='number'),
+
+            html.Button("Confirmar", id='confirm-button', n_clicks=0),
+
+            html.Div(id='confirmation-message')
+
+        ], style={'display': 'flex', 'width': '100%', 'justify-content': 'space-between', 'align-items': 'center'}),
+
+        html.Div([
+            html.H2("Selecione um Dispositivo:"),
+            dcc.Dropdown(
+                id='device-dropdown',
+                options=[{'label': device, 'value': device} for device in devices.keys()],
+                value='localhost',  # Define o valor inicial para localhost
+                style={'width': '50%'}
+            ),
+            html.Div(id='selected-device-info')  # Para exibir as informações do dispositivo selecionado
+        ], style={'display': 'flex', 'width': '100%', 'justify-content': 'space-between', 'align-items': 'center'}),
 
         html.Div([
 
@@ -230,6 +268,45 @@ sysContact = sysInformations[3]
 sysName = sysInformations[4]
 sysLocation = sysInformations[5]
 sysServices = sysInformations[6]
+
+nonExistentDevice = False
+
+
+# Callback para tratar o botão de confirmação
+@app.callback(
+    Output('confirmation-message', 'children'),
+    Input('confirm-button', 'n_clicks'),
+    State('device-name', 'value'),
+    State('device-location', 'value'),
+    State('device-interfaces', 'value')
+)
+def add_device(n_clicks, ip, community_param, interval_time_param):
+    if n_clicks > 0:
+        if ip:
+            devices[ip] = {'ip': ip, 'community': community_param, 'interval_time': interval_time_param}
+
+
+@app.callback(
+    Output('selected-device-info', 'children'),
+    Input('device-dropdown', 'value')
+)
+def update_selected_device(selected_device):
+    global selectedDevice, agentStatus
+    if selected_device in devices:
+        selectedDevice = devices[selected_device]
+        agentStatus['color'] = 'red'
+        agentStatus['background'] = 'black'
+        agentStatus['index'] = 1
+
+
+@app.callback(
+    Output('device-dropdown', 'options'),
+    [Input('confirm-button', 'n_clicks')]
+)
+def update_dropdown_options(n_clicks):
+    # Lógica para criar as opções do dropdown a partir do dicionário de devices
+    options = [{'label': name, 'value': name} for name in devices.keys()]
+    return options
 
 
 # Os gráficos abaixo são para Desempenho
@@ -394,6 +471,32 @@ def update_graph6(n):
     Input(component_id='my-input', component_property='n_intervals')
 )
 def update_data(n):
+    global selectedDevice, host, community, intervalTime, agentStatus, sysInformations, sysDescr, \
+        sysObjectID, sysUpTime, sysContact, sysName, sysLocation, sysServices
+
+    host = selectedDevice['ip']
+    community = selectedDevice['community']
+    intervalTime = selectedDevice['interval_time']
+
+    sysInformations = snmpwalk(oids['sysInformations'])
+    sysDescr = sysInformations[0]
+    sysObjectID = sysInformations[1]
+    sysUpTime = sysInformations[2]
+    sysContact = sysInformations[3]
+    sysName = sysInformations[4]
+    sysLocation = sysInformations[5]
+    sysServices = sysInformations[6]
+
+    # Verifica sysUpTime do agente, se for menor que 1 minuto, significa que caiu, mostrar mensagem
+    if sysUpTime < 60:
+        agentStatus['color'] = 'red'
+        agentStatus['background'] = 'black'
+        agentStatus['index'] = 1
+    else:
+        agentStatus['color'] = 'transparent'
+        agentStatus['background'] = 'transparent'
+        agentStatus['index'] = -1
+
     sys_descr_object = decode(sysDescr)
     software = sys_descr_object.split("Software: ")
     hardware = sys_descr_object.split("Software: ")
@@ -426,9 +529,6 @@ def update_data(n):
     content_table = html.Table(content_trs, style={'display': 'flex', 'flex-wrap': 'wrap', 'width': '100%'})
 
     table_html = html.Div([title_table, content_table])
-
-    global countTime
-    global agentStatus
 
     # Informações
     dump = html.Div([
@@ -465,31 +565,13 @@ def update_data(n):
     ], style={'display': 'flex', 'flex-direction': 'column', 'height': '80%', 'justify-content': 'center',
               'text-align': 'center'})
 
-    # Quando der 6 ciclos, ou seja, 30 segundos, verifica sysUpTime do agente
-    if countTime > 5:
-        countTime = 0
-        sys_up_time = snmpget(oids['sysUpTime'])
-
-        # Se o sysUpTime for menor que 1 minuto, significa que caiu, mostrar mensagem
-        if sys_up_time < 60:
-            agentStatus['color'] = 'red'
-            agentStatus['background'] = 'black'
-            agentStatus['index'] = 1
-        else:
-            agentStatus['color'] = 'transparent'
-            agentStatus['background'] = 'transparent'
-            agentStatus['index'] = -1
-    else:
-        countTime += 1
-
     return dump
 
 
 # ******************************* Métricas *******************************
 if_number_object = int(snmpget(oids['ifNumber']))
-interval_time = 5
 second_time = time.time()
-first_time = int(time.time() - interval_time)
+first_time = int(time.time() - intervalTime)
 
 
 def porcentagem_pacotes_recebidos_erro():
